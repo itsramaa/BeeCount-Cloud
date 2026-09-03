@@ -38,6 +38,12 @@ const CalendarPage = lazy(() =>
 const CategoriesPage = lazy(() =>
   import('./pages/sections/CategoriesPage').then((m) => ({ default: m.CategoriesPage })),
 )
+const GoalsPage = lazy(() =>
+  import('./pages/sections/GoalsPage').then((m) => ({ default: m.GoalsPage })),
+)
+const InsightsPage = lazy(() =>
+  import('./pages/sections/InsightsPage').then((m) => ({ default: m.InsightsPage })),
+)
 const LedgersPage = lazy(() =>
   import('./pages/sections/LedgersPage').then((m) => ({ default: m.LedgersPage })),
 )
@@ -225,6 +231,22 @@ function AppRoutes() {
           element={
             <Suspense fallback={<RouteFallback />}>
               <BudgetsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="insights"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <InsightsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="goals"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <GoalsPage />
             </Suspense>
           }
         />

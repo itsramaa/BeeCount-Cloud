@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   createBudget,
   deleteBudget,
+  fetchLedgerInsights,
   fetchReadBudgets,
   fetchReadBudgetUsage,
   fetchWorkspaceCategories,
@@ -49,6 +50,12 @@ export function BudgetsPage() {
     [],
   )
   const [usageById, setUsageById] = useState<Record<string, BudgetUsage | undefined>>({})
+  /** 洞察端点算好的总预算「日均还能花」+ 本周期剩余天数。周期最后一天服务端
+   *  返的是整笔剩余而不是除法结果,比前端自己算更准。取不到时回落本地算法。 */
+  const [safeDaily, setSafeDaily] = useState<{
+    daysRemaining: number
+    dailyAvailable: number
+  } | null>(null)
   const [form, setForm] = useState<BudgetForm>(budgetDefaults())
 
   const notifyError = useCallback(
@@ -89,6 +96,7 @@ export function BudgetsPage() {
     if (!activeLedgerId) {
       setBudgets([])
       setUsageById({})
+      setSafeDaily(null)
       return
     }
     try {
@@ -101,6 +109,24 @@ export function BudgetsPage() {
       void refreshUsages(b, c)
     } catch (err) {
       notifyError(err)
+    }
+    // 洞察端点比预算端点新,失败时不弹错也不阻塞列表 —— 只是拿不到服务端算好
+    // 的日均值,下面 totalSummary 会回落本地算法。
+    try {
+      const insights = await fetchLedgerInsights(token, activeLedgerId, {
+        tzOffsetMinutes: -new Date().getTimezoneOffset(),
+      })
+      const total = insights.budget_status.find((s) => s.budget_type === 'total')
+      setSafeDaily(
+        total
+          ? {
+              daysRemaining: insights.current.days_remaining,
+              dailyAvailable: total.safe_daily,
+            }
+          : null,
+      )
+    } catch (_err) {
+      setSafeDaily(null)
     }
     // setBudgets / setCategories 来自 usePageCache,引用稳定
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,10 +147,12 @@ export function BudgetsPage() {
     if (ids.length > 0) ensureLoadedMany(ids)
   }, [categories, ensureLoadedMany])
 
-  // 总预算的"日均可用 / 剩余天数",对齐 mobile budget_page.dart 算法。
+  // 总预算的"日均可用 / 剩余天数"。优先用服务端 insights 的 safe_daily
+  // (周期最后一天不做除法),取不到时回落本地算法,对齐 mobile budget_page.dart。
   const totalSummary = useMemo(() => {
     const total = budgets.find((b) => b.type === 'total')
     if (!total) return null
+    if (safeDaily) return safeDaily
     const startDay = Math.max(1, Math.min(28, currentLedger?.month_start_day ?? 1))
     const { end } = currentMonthRange(startDay)
     const now = new Date()
@@ -132,9 +160,9 @@ export function BudgetsPage() {
     const daysRemaining = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / msPerDay))
     const used = usageById[total.id]?.used ?? 0
     const remaining = Math.max(0, total.amount - used)
-    const dailyAvailable = daysRemaining > 0 ? remaining / daysRemaining : 0
+    const dailyAvailable = daysRemaining > 0 ? remaining / daysRemaining : remaining
     return { daysRemaining, dailyAvailable }
-  }, [budgets, usageById, currentLedger])
+  }, [budgets, usageById, currentLedger, safeDaily])
 
   const onSubmit = async (): Promise<boolean> => {
     if (!activeLedgerId) {

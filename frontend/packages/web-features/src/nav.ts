@@ -7,6 +7,8 @@ export type AppSection =
   | 'tags'
   | 'budgets'
   | 'ledgers'
+  | 'insights'
+  | 'goals'
   | 'settings-profile'
   | 'settings-appearance'
   | 'settings-health'
@@ -43,6 +45,17 @@ export const NAV_GROUPS: NavGroup[] = [
       { key: 'tags', labelKey: 'nav.tags' }
       // 预算从顶部 bookkeeping 组移出,改放头像下拉的"工具"里 —— 用户
       // 场景下预算访问频率低于 tx/account/category,顶部 nav 保持瘦。
+    ]
+  },
+  {
+    // 洞察 / 目标是"看完再决定"的分析入口,访问频率低于 tx/account/category,
+    // 跟 budgets 同一档。AppHeader 把非 bookkeeping/settings 组自动收进
+    // MoreHorizontal 下拉,所以顶部 nav 仍然保持瘦。
+    key: 'tools',
+    titleKey: 'nav.group.tools',
+    items: [
+      { key: 'insights', labelKey: 'nav.insights' },
+      { key: 'goals', labelKey: 'nav.goals' }
     ]
   },
   {

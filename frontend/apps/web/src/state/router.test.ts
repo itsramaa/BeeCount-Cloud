@@ -54,5 +54,21 @@ expect(parseRoute('/app/workspace/transactions')).toEqual({
         section: 'settings-health'
       })
     ).toBe('/app/settings/health')
+    // insights / goals 是 routePath 这个穷举 switch 的新分支 —— 漏掉的话
+    // tsc -b 直接失败,这里再钉一层运行时断言。
+    expect(
+      routePath({
+        kind: 'app',
+        ledgerId: '',
+        section: 'insights'
+      })
+    ).toBe('/app/insights')
+    expect(
+      routePath({
+        kind: 'app',
+        ledgerId: '',
+        section: 'goals'
+      })
+    ).toBe('/app/goals')
   })
 })

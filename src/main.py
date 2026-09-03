@@ -26,6 +26,8 @@ from .bootstrap_admin import ensure_admin
 from .routers import admin, attachments, auth, devices, pats, profile, read, sync, write, ws
 from .routers import admin_backup, mcp_calls, two_factor
 from .routers import ai as ai_router
+from .routers import goals as goals_router
+from .routers import insights as insights_router
 from .routers import import_data as import_router
 from .routers import invites as invites_router
 from .routers import members as members_router
@@ -187,6 +189,10 @@ app.include_router(invites_router.router, prefix=settings.api_prefix, tags=["inv
 app.include_router(members_router.router, prefix=settings.api_prefix, tags=["members"])
 app.include_router(shared_resources_router.router, prefix=settings.api_prefix, tags=["shared-resources"])
 app.include_router(member_stats_router.router, prefix=settings.api_prefix, tags=["member-stats"])
+# 攒钱目标 — server-only 实体,不进同步层。路径自带 /ledgers/... 前缀,
+# 所以 prefix 就是 api_prefix。
+app.include_router(goals_router.router, prefix=settings.api_prefix, tags=["goals"])
+app.include_router(insights_router.router, prefix=settings.api_prefix, tags=["insights"])
 
 _static_dir = Path(settings.web_static_dir)
 

@@ -19,6 +19,8 @@ export const APP_SECTIONS: AppSection[] = [
   'budgets',
   'ledgers',
   'overview',
+  'insights',
+  'goals',
   'settings-profile',
   'settings-appearance',
   'settings-ai',
@@ -89,6 +91,10 @@ function parseRootSection(parts: string[]): AppSection {
       return 'ledgers'
     case 'overview':
       return 'overview'
+    case 'insights':
+      return 'insights'
+    case 'goals':
+      return 'goals'
     case 'admin/users':
       return 'admin-users'
     case 'settings/profile':
@@ -177,6 +183,8 @@ export function parseRoute(pathname: string): AppRoute {
     parts[1] === 'categories' ||
     parts[1] === 'tags' ||
     parts[1] === 'budgets' ||
+    parts[1] === 'insights' ||
+    parts[1] === 'goals' ||
     parts[1] === 'overview'
   ) {
     return { kind: 'app', ledgerId: '', section: parseRootSection(parts.slice(1)) }
@@ -214,6 +222,10 @@ export function routePath(route: AppRoute): string {
       return '/app/ledgers'
     case 'overview':
       return '/app/overview'
+    case 'insights':
+      return '/app/insights'
+    case 'goals':
+      return '/app/goals'
     case 'settings-profile':
       return '/app/settings/profile'
     case 'settings-appearance':

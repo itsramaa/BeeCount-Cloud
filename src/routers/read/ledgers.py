@@ -4,8 +4,6 @@
 都是以账本为主键的 projection 查询,不做跨账本聚合。"""
 from __future__ import annotations
 
-from sqlalchemy import false as sa_false
-
 from ._shared import *  # noqa: F401,F403 — imports + helpers + router
 
 
@@ -553,63 +551,24 @@ def list_budgets_usage(
         is_admin=is_admin,
     )
 
-    # 跟 list_budgets 一致:不 filter enabled,以便前端 join 时不丢 budget。
-    raw = db.scalars(
-        select(ReadBudgetProjection).where(
-            ReadBudgetProjection.ledger_id == ledger.id,
-        )
-    ).all()
-
-    # 跟 list_budgets 同款脏数据去重: (type, category_sync_id) 维度,sync_id
-    # 字典序最大胜出。usage 跟 list 必须用同一份 budget 才一致。
-    dedup: dict[tuple[str, str], ReadBudgetProjection] = {}
-    for b in raw:
-        btype = b.budget_type or "total"
-        if btype == "category" and not b.category_sync_id:
-            continue
-        key = (btype, b.category_sync_id or "")
-        current = dedup.get(key)
-        if current is None or current.sync_id < b.sync_id:
-            dedup[key] = b
-
-    now = datetime.now(timezone.utc)
+    # 用量口径(去重 / 折本位币 / 子分类展开 / exclude_from_budget)只在
+    # services/insight_loader.budget_usage_rows 里有一份实现,此处只解析周期
+    # 边界 + 组装响应。
+    # 函数内 import:insight_loader 模块级 import 本模块的 _current_period_range,
+    # 顶层 import 会成环(同 ledgers.py:31 的既有写法)。
+    from ...services.insight_loader import budget_usage_rows
 
     # 预算周期跟随账本 month_start_day(设计 D5:budget.start_day 弃用,
     # 与 mobile local_budget_repository 同口径)
-    period_day = ledger.month_start_day or 1
-
-    start, end = _current_period_range(period_day, now)
-
-    items: list[ReadBudgetUsageItemOut] = []
-    for b in dedup.values():
-        # 预算金额本身是账本本位币,用量必须同计量单位:
-        # 折本位币口径(0018)读 native_amount,NULL 回退 amount。
-        base_q = select(func.coalesce(func.sum(
-            func.coalesce(ReadTxProjection.native_amount, ReadTxProjection.amount)
-        ), 0.0)).where(
-            ReadTxProjection.ledger_id == ledger.id,
-            ReadTxProjection.tx_type == "expense",
-            ReadTxProjection.happened_at >= start,
-            ReadTxProjection.happened_at < end,
-            # D2: 预算用量仅看 exclude_from_budget,与 exclude_from_stats 独立。
-            # 标记排除预算的交易不计入用量(total + category 共用此 base_q)。
-            ReadTxProjection.exclude_from_budget == sa_false(),
-        )
-        if (b.budget_type or "total") == "category" and b.category_sync_id:
-            # parent + 所有 parent_sync_id 指向它的子分类
-            child_ids = list(db.scalars(
-                select(UserCategoryProjection.sync_id).where(
-                    UserCategoryProjection.user_id == ledger.user_id,
-                    UserCategoryProjection.parent_sync_id == b.category_sync_id,
-                )
-            ).all())
-            ids = [b.category_sync_id, *child_ids]
-            base_q = base_q.where(ReadTxProjection.category_sync_id.in_(ids))
-
-        used = float(db.scalar(base_q) or 0.0)
-        items.append(ReadBudgetUsageItemOut(budget_id=b.sync_id, used=abs(used)))
-
-    return ReadBudgetUsageOut(items=items)
+    start, end = _current_period_range(
+        ledger.month_start_day or 1, datetime.now(timezone.utc)
+    )
+    return ReadBudgetUsageOut(
+        items=[
+            ReadBudgetUsageItemOut(budget_id=b.sync_id, used=used)
+            for b, used in budget_usage_rows(db, ledger=ledger, start=start, end=end)
+        ]
+    )
 
 
 def _current_period_range(

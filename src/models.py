@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -800,3 +801,69 @@ class BackupRunTarget(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     bytes_transferred: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# ============================================================================
+# Financial goals —— 攒钱目标(「笔记本电脑,15000,10 个月」)
+#
+# **不是 sync 实体**,server-only,跟 personal_access_tokens / mcp_call_logs /
+# backup_remotes 一个性质:没有 read_*_projection、不登记 sync_applier 的三张
+# dispatch 表、不写 sync_changes、没有 /write/* 端点。只走 src/routers/goals.py
+# 的 CRUD。mobile(Flutter)当前看不到目标数据 —— 上移到 sync 层需要先补齐
+# mobile 侧契约,本 lane 不做。
+# ============================================================================
+
+
+class FinancialGoal(Base):
+    """用户在某账本下的攒钱目标。进度靠 PATCH saved_amount 手动推进。
+
+    设计取舍:
+
+    - ``ledger_id`` **故意 NOT NULL**:结余(surplus)本身是账本维度算出来的,
+      跨账本分配没有可辩护的语义(A 账本的结余凭什么分给 B 账本的目标)。
+      这也跟 budget 保持一致 —— budget 同样是 ledger-scoped。
+    - ``currency`` 是**创建时的快照**。账本币种日后改了,已存在的目标不回写:
+      目标金额是用户当时按那个币种想的数,静默换币会改变语义。
+    - ``priority`` 是分配权重,数值越大越优先。上下界在 API 层收(0-100),
+      DB 只存 Integer,不做 CHECK 约束(SQLite 上加 CHECK 后 migration 回滚
+      成本更高,收益为零)。
+    - ``status`` 是 enum-like 字符串,application 层校验:
+      ``active`` | ``achieved`` | ``archived``。
+    - ponytail: ``saved_amount`` 手动 PATCH 推进,不从交易派生。上限是「用户
+      忘记更新则进度失真」。要自动派生就得给 transaction 加一列
+      ``goal_sync_id`` 指向目标,而 transaction 是 sync 实体 —— 加列就要动
+      mobile ↔ server 的同步契约(_MERGE_SPECS + mobile ChangeTracker 两侧),
+      当前收益撑不起这个代价。升级路径:等目标本身上 sync 层时,把
+      ``saved_amount`` 换成对「关联到该目标的交易」求和的派生值,PATCH 端点
+      退化成兜底手工校正。
+    """
+
+    __tablename__ = "financial_goals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # NOT NULL:见上面 class docstring 的第一条取舍
+    ledger_id: Mapped[str] = mapped_column(ForeignKey("ledgers.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(128))
+    target_amount: Mapped[float] = mapped_column(Float)
+    saved_amount: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    # 创建时 Ledger.currency 的快照,后续账本改币种不回写
+    currency: Mapped[str] = mapped_column(String(16))
+    # 期望达成日。可空 —— 「有钱就攒」的目标没有 deadline
+    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # 分配权重,越大越优先。API 层限 0-100
+    priority: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # 'active' | 'achieved' | 'archived'
+    status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+# 主查询形态是「我在这个账本下的目标列表」,(user_id, ledger_id) 复合索引直接命中
+Index(
+    "ix_financial_goals_user_ledger",
+    FinancialGoal.user_id,
+    FinancialGoal.ledger_id,
+)
