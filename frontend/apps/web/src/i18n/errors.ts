@@ -13,6 +13,9 @@ const ERROR_KEYS: Record<string, string> = {
   AUTH_INSUFFICIENT_SCOPE: 'error.AUTH_INSUFFICIENT_SCOPE',
   ADMIN_FORBIDDEN: 'error.ADMIN_FORBIDDEN',
   RATE_LIMITED: 'error.RATE_LIMITED',
+  // /ai/income-growth 自己的滑动窗口(10 次 / 300 秒 / 用户)。复用通用限流文案,
+  // 不新增 key —— 用户要知道的就是「太频繁了,等一下」。
+  AI_INCOME_GROWTH_RATE_LIMITED: 'error.RATE_LIMITED',
   LEDGER_ALREADY_EXISTS: 'error.LEDGER_ALREADY_EXISTS',
   ENTITY_NOT_FOUND: 'error.ENTITY_NOT_FOUND',
   WRITE_VALIDATION_FAILED: 'error.WRITE_VALIDATION_FAILED',

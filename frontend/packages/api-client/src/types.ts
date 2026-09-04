@@ -89,6 +89,38 @@ export type AIConfig = {
 /** 内置「智谱GLM」provider id —— 跟 mobile `zhipuDefault.id` 对齐,删除 fallback 用。 */
 export const BUILTIN_PROVIDER_ID = 'zhipu_glm'
 
+export type CareerEmploymentType =
+  | 'full_time'
+  | 'part_time'
+  | 'freelance'
+  | 'self_employed'
+  | 'student'
+  | 'unemployed'
+  | 'other'
+
+/**
+ * 职业档案 —— 「收入增长建议」端点的用户侧输入。
+ *
+ * 跟 `appearance` / `ai_config` 不同:那两个 blob 的 schema 归 mobile 所有,
+ * server 只透传;这个 blob 要拼进 LLM prompt,所以服务端 `schemas.CareerProfile`
+ * 定了形并校验。下面的上界跟服务端逐字对齐,前端表单据此在提交前拦住 422:
+ *   occupation ≤ 128 / skills ≤ 20 项且每项 ≤ 64 / experience_years 0..80 /
+ *   available_hours_per_week 0..168 / region ≤ 64 / notes ≤ 500。
+ * 数字允许小数,不必是整数。
+ *
+ * 全字段可选。PATCH 传 `{}` = 清空整个档案(对齐 appearance / ai_config 的
+ * 整体替换语义),不传 = 不动。
+ */
+export type CareerProfile = {
+  occupation?: string | null
+  skills?: string[] | null
+  experience_years?: number | null
+  available_hours_per_week?: number | null
+  employment_type?: CareerEmploymentType | null
+  region?: string | null
+  notes?: string | null
+}
+
 export type ProfileMe = {
   user_id: string
   email: string
@@ -112,6 +144,8 @@ export type ProfileMe = {
   ai_config?: Record<string, any> | null
   /** 主币种(本位币),资产折算目标。mobile prefs `baseCurrency` 同步而来。 */
   primary_currency?: string | null
+  /** 职业档案。null = 用户没填过,或存库的 JSON 已经不合当前 schema。 */
+  career_profile?: CareerProfile | null
 }
 
 export type WriteCommitMeta = {

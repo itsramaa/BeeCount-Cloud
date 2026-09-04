@@ -41,6 +41,8 @@ import {
 
 import { patchProfileMe, uploadProfileAvatar } from '@beecount/api-client'
 
+import { CareerProfileSection } from '../income/CareerProfileSection'
+
 import { useAuth } from '../../context/AuthContext'
 import {
   HEADER_SKINS,
@@ -659,6 +661,10 @@ export function SettingsProfileAppearanceSection() {
           </div>
         </CardContent>
       </Card>
+
+      {/* 职业档案 —— 只读卡片 + 共用编辑弹窗。只喂给收入增长建议端点,不影响
+          任何统计数字,所以放在偏好之后、汇率之前。 */}
+      <CareerProfileSection />
 
       {/* 汇率管理小节 —— 主币种未设置时内部渲染空态、不发请求 */}
       <SettingsExchangeRatesSection />

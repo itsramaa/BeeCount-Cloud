@@ -1,12 +1,17 @@
 import re
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # 6 位 hex，开头必须有 #；字母大小写都接受，validator 会归一化成大写。
 _HEX6_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+# 职业档案 skills 的容量上限:20 项足够描述一个人的技能栈,再多就是噪音,
+# 且这个 blob 要进 LLM prompt,长度直接换算成 token 成本。
+_CAREER_MAX_SKILLS = 20
+_CareerSkill = Annotated[str, Field(max_length=64)]
 
 MemberRole = Literal["owner", "editor", "viewer"]
 SyncAction = Literal["upsert", "delete"]
@@ -66,6 +71,59 @@ class UserOut(BaseModel):
     is_admin: bool = False
 
 
+CareerEmploymentType = Literal[
+    "full_time", "part_time", "freelance", "self_employed", "student", "unemployed", "other"
+]
+
+
+class CareerProfile(BaseModel):
+    """职业档案 —— 喂给"收入增长建议"AI 端点的用户侧输入。
+
+    跟 `appearance` / `ai_config` 不同:那两个 blob 的 schema 归 mobile 所有,
+    server 只做 dict 透传;这个 blob 要拼进 LLM prompt,所以在 server 端定形
+    并校验,不接受任意结构。
+
+    `extra="ignore"` 而不是 `forbid`:将来的 mobile / web 版本可能推来本版本
+    还不认识的 key,那不该让用户**整个** profile PATCH 挂在 422 上。忽略多余
+    key 是"严格拒绝"和"盲目透传"之间的安全折中。
+
+    所有字段可选 —— 用户想填多少填多少,AI 侧按缺省字段降级处理。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    occupation: str | None = Field(default=None, max_length=128)
+    skills: list[_CareerSkill] | None = Field(default=None, max_length=_CAREER_MAX_SKILLS)
+    experience_years: float | None = Field(default=None, ge=0, le=80)
+    # 168 = 一周总小时数,物理上限
+    available_hours_per_week: float | None = Field(default=None, ge=0, le=168)
+    employment_type: CareerEmploymentType | None = None
+    # 自由文本:国家代码或城市名都行,用户自己决定粒度
+    region: str | None = Field(default=None, max_length=64)
+    notes: str | None = Field(default=None, max_length=500)
+
+    @field_validator("occupation", "region", "notes")
+    @classmethod
+    def _strip_text(cls, value: str | None) -> str | None:
+        """去空白,全空白视作"没填"。对齐 routers/goals.py `_normalize_name`,
+        区别是这里不报错 —— 职业档案每个字段都可选,空 = 用户跳过了。"""
+        return value.strip() or None if value is not None else None
+
+    @field_validator("skills", mode="before")
+    @classmethod
+    def _clean_skills(cls, value: Any) -> Any:
+        """逐项去空白、丢掉空串(不存 `[""]`),清空后视作没填。
+
+        `mode="before"` 是为了让 strip 先于单项 `max_length` 生效 ——
+        `"  " + 64 字符` 不该因为两个空格被拒。非 str 的项**原样留下**,让
+        pydantic 报标准类型错误,不静默吞掉用户送错的数据。
+        """
+        if not isinstance(value, list):
+            return value
+        cleaned = [item.strip() if isinstance(item, str) else item for item in value]
+        return [item for item in cleaned if item != ""] or None
+
+
 class UserProfileOut(BaseModel):
     user_id: str
     email: str
@@ -89,6 +147,9 @@ class UserProfileOut(BaseModel):
     ai_config: dict | None = None
     # 用户主币种,ISO 4217 大写代码(如 CNY / USD / JPY)。None = 未设置。
     primary_currency: str | None = None
+    # 职业档案。server 端校验过的结构(见 CareerProfile),不是裸 dict。
+    # None = 用户没填过 / 存库的 JSON 已经不合当前 schema。
+    career_profile: CareerProfile | None = None
 
 
 class UserProfilePatchRequest(BaseModel):
@@ -100,6 +161,8 @@ class UserProfilePatchRequest(BaseModel):
     appearance: dict | None = None
     ai_config: dict | None = None
     primary_currency: str | None = Field(default=None, pattern=r"^[A-Za-z]{3,8}$")
+    # 传 dict 整体替换,传 `{}` 清空(对齐 appearance / ai_config),不传 = 不动。
+    career_profile: CareerProfile | None = None
 
     @field_validator("display_name")
     @classmethod

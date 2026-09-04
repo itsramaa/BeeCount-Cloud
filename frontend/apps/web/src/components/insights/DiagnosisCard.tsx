@@ -14,15 +14,17 @@ interface Props {
   currency: string
 }
 
-/** 每个 code 一个专属图标 —— 颜色不是唯一的语义载体。 */
-const ICON_BY_DIAGNOSIS: Record<InsightDiagnosis, LucideIcon> = {
+/** 每个 code 一个专属图标 —— 颜色不是唯一的语义载体。
+ *  导出给收入增长页的评估面板复用:同一个 diagnosis code 在两个页面必须是同一个
+ *  图标,各自维护一份迟早分叉成「同一个结论两个图标」。 */
+export const ICON_BY_DIAGNOSIS: Record<InsightDiagnosis, LucideIcon> = {
   insufficient_data: CircleDashed,
   on_track: CheckCircle2,
   reduce_spending: AlertTriangle,
   increase_income: TrendingUp,
 }
 
-const TONE_BY_DIAGNOSIS: Record<InsightDiagnosis, string> = {
+export const TONE_BY_DIAGNOSIS: Record<InsightDiagnosis, string> = {
   insufficient_data: 'text-muted-foreground',
   on_track: 'text-green-600 dark:text-green-500',
   reduce_spending: 'text-red-600 dark:text-red-500',

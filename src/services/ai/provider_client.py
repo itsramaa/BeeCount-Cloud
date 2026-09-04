@@ -320,6 +320,7 @@ async def call_chat_json(
     messages: list[dict[str, object]],
     timeout: float = 30.0,
     max_retries: int = 1,
+    max_tokens: int | None = None,
 ) -> dict | list:
     """调 OpenAI-compatible /chat/completions(非 stream),返 JSON。
 
@@ -327,6 +328,13 @@ async def call_chat_json(
     - attempt 0:带 `response_format={"type": "json_object"}`(部分 provider 支持,提高准确率)
     - attempt 1+:去掉 `response_format`(兼容不支持该参数的 provider,有些网关传了会卡死)
     - 都依赖 `_try_parse_json` 鲁棒抽 JSON(允许 markdown code block 包裹 / 前后缀文字)
+
+    `max_tokens=None`(默认)时**完全不发这个字段** —— 既有调用方的 payload 逐字节
+    不变。给了值就带上,作为输出长度上界。注意它是可丢键(不在 `_REQUIRED_KEYS`
+    里),provider 拒绝时 `_post_chat_adaptive` 会摘掉重发,这是想要的行为。另外:
+    部分自建网关(如 9router 这类 OpenAI-compatible gateway)对不认识的参数是
+    **静默丢弃**而不是报 400,所以 `max_tokens` 不能当成唯一的成本上界,调用方仍
+    需要自己限流 + 收紧 timeout / max_retries。
     """
     import time
 
@@ -347,6 +355,8 @@ async def call_chat_json(
             "messages": messages,
             "temperature": temperature,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if attempt == 0:
             payload["response_format"] = {"type": "json_object"}
 
@@ -373,8 +383,18 @@ async def call_chat_json(
                     f"provider {config.provider_id} returned {resp.status_code}: {resp.text[:200]}"
                 )
             data = resp.json()
+            # `choices` 缺失时 `.get("choices", [{}])` 能兜底,但网关返
+            # `{"choices": []}` 时 `[0]` 抛 IndexError —— 外层 try 只 catch
+            # httpx 的两个异常,于是冒到 FastAPI 变成 500 INTERNAL_ERROR。
+            # 自建网关(上游全部不可用 / 全部被过滤时)会返这种 body,所以按
+            # provider 错误如实报出去,调用方能照常给 502 而不是「服务端 bug」。
+            choices = data.get("choices")
+            if not isinstance(choices, list) or not choices:
+                raise ChatProviderError(
+                    f"provider {config.provider_id} returned no choices: {resp.text[:200]}"
+                )
             content = (
-                data.get("choices", [{}])[0]
+                choices[0]
                 .get("message", {})
                 .get("content", "")
             )

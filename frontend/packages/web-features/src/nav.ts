@@ -9,6 +9,7 @@ export type AppSection =
   | 'ledgers'
   | 'insights'
   | 'goals'
+  | 'income-growth'
   | 'settings-profile'
   | 'settings-appearance'
   | 'settings-health'
@@ -55,7 +56,10 @@ export const NAV_GROUPS: NavGroup[] = [
     titleKey: 'nav.group.tools',
     items: [
       { key: 'insights', labelKey: 'nav.insights' },
-      { key: 'goals', labelKey: 'nav.goals' }
+      { key: 'goals', labelKey: 'nav.goals' },
+      // 收入增长建议 —— 手动触发的一次性分析,访问频率比 insights / goals 更低,
+      // 同一档,同一组。
+      { key: 'income-growth', labelKey: 'nav.incomeGrowth' }
     ]
   },
   {

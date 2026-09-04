@@ -21,6 +21,7 @@ export const APP_SECTIONS: AppSection[] = [
   'overview',
   'insights',
   'goals',
+  'income-growth',
   'settings-profile',
   'settings-appearance',
   'settings-ai',
@@ -95,6 +96,8 @@ function parseRootSection(parts: string[]): AppSection {
       return 'insights'
     case 'goals':
       return 'goals'
+    case 'income-growth':
+      return 'income-growth'
     case 'admin/users':
       return 'admin-users'
     case 'settings/profile':
@@ -185,6 +188,9 @@ export function parseRoute(pathname: string): AppRoute {
     parts[1] === 'budgets' ||
     parts[1] === 'insights' ||
     parts[1] === 'goals' ||
+    // 漏了这一条 `/app/income-growth` 会掉到下面的 legacy `:ledgerId` 分支,
+    // 被当成账本 id 解析,然后渲染 transactions。
+    parts[1] === 'income-growth' ||
     parts[1] === 'overview'
   ) {
     return { kind: 'app', ledgerId: '', section: parseRootSection(parts.slice(1)) }
@@ -226,6 +232,8 @@ export function routePath(route: AppRoute): string {
       return '/app/insights'
     case 'goals':
       return '/app/goals'
+    case 'income-growth':
+      return '/app/income-growth'
     case 'settings-profile':
       return '/app/settings/profile'
     case 'settings-appearance':

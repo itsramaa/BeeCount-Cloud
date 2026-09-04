@@ -176,7 +176,15 @@ export async function authedPost<T>(
   path: string,
   token: string,
   body: unknown,
-  idempotencyKey?: string
+  idempotencyKey?: string,
+  /**
+   * 可选的取消信号。给「用户点了按钮在等上游 LLM」这类长请求用(见
+   * `incomeGrowth.ts`),让用户能主动放弃等待。abort 后 fetch 抛 `AbortError`。
+   *
+   * 传进 `makeRequest` 工厂内部而不是只包一次 —— 401 之后的 replay 会再调一次
+   * 同一个工厂,信号必须同样生效,否则「取消」在 token 刚过期时会静默失效。
+   */
+  signal?: AbortSignal
 ): Promise<T> {
   const res = await authedFetch(
     (tok) =>
@@ -186,7 +194,8 @@ export async function authedPost<T>(
           ...authHeaders(tok, idempotencyKey),
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal
       }),
     token
   )

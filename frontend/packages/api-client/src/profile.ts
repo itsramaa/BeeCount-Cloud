@@ -1,6 +1,6 @@
 import { API_BASE, authedGet, authedPatch, resolveApiUrl } from './http'
 import { extractApiError } from './errors'
-import type { AIConfig, ProfileAppearance, ProfileMe } from './types'
+import type { AIConfig, CareerProfile, ProfileAppearance, ProfileMe } from './types'
 
 export async function fetchProfileMe(token: string): Promise<ProfileMe> {
   const profile = await authedGet<ProfileMe>('/profile/me', token)
@@ -34,6 +34,9 @@ export async function patchProfileMe(
     ai_config?: AIConfig | Record<string, any>
     /** 主币种(本位币),资产折算目标。与 mobile prefs `baseCurrency` 同步。 */
     primary_currency?: string
+    /** 职业档案 —— **整体**替换语义。传 `{}` 清空整个档案,不传则不动。
+     *  字段上界见 `types.ts` 的 `CareerProfile`,超界服务端 422。 */
+    career_profile?: CareerProfile
   }
 ): Promise<ProfileMe> {
   const profile = await authedPatch<ProfileMe>('/profile/me', token, payload)

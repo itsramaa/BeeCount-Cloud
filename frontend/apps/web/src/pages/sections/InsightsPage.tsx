@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CircleDashed, Users } from 'lucide-react'
+import { CircleDashed, TrendingUp, Users } from 'lucide-react'
 
 import { fetchLedgerInsights, type LedgerInsights } from '@beecount/api-client'
 import {
   Badge,
+  Button,
   Card,
   CardContent,
   CardHeader,
@@ -144,13 +145,32 @@ export function InsightsPage() {
   // safe_daily 只来自当前周期的预算用量,跟 median 无关,所以样本不足时仍然有效。
   const heroFirst = totalBudget !== null
   const diagnosisStrip = (
-    <DiagnosisCard
-      diagnosis={data.diagnosis}
-      baseline={data.baseline}
-      current={data.current}
-      basisPeriods={data.range.basis_periods}
-      currency={data.currency}
-    />
+    <>
+      <DiagnosisCard
+        diagnosis={data.diagnosis}
+        baseline={data.baseline}
+        current={data.current}
+        basisPeriods={data.range.basis_periods}
+        currency={data.currency}
+      />
+      {/* increase_income 是唯一「支出没超基线、但结余率仍偏低」的诊断 —— 也就是
+          唯一该动收入侧的情形。只在这一个 code 下给收入增长页入口,其余诊断下
+          给这个入口等于建议用户去做一个更难的动作。DiagnosisCard 本身不动。 */}
+      {data.diagnosis === 'increase_income' ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
+          <p className="min-w-0 text-xs text-muted-foreground">{t('income.cta.title')}</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/app/income-growth')}
+          >
+            <TrendingUp aria-hidden className="mr-1 h-4 w-4" />
+            {t('income.cta.action')}
+          </Button>
+        </div>
+      ) : null}
+    </>
   )
   const hero = (
     <SafeDailyHero

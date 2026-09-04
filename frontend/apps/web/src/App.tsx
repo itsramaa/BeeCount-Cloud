@@ -41,6 +41,9 @@ const CategoriesPage = lazy(() =>
 const GoalsPage = lazy(() =>
   import('./pages/sections/GoalsPage').then((m) => ({ default: m.GoalsPage })),
 )
+const IncomeGrowthPage = lazy(() =>
+  import('./pages/sections/IncomeGrowthPage').then((m) => ({ default: m.IncomeGrowthPage })),
+)
 const InsightsPage = lazy(() =>
   import('./pages/sections/InsightsPage').then((m) => ({ default: m.InsightsPage })),
 )
@@ -247,6 +250,14 @@ function AppRoutes() {
           element={
             <Suspense fallback={<RouteFallback />}>
               <GoalsPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="income-growth"
+          element={
+            <Suspense fallback={<RouteFallback />}>
+              <IncomeGrowthPage />
             </Suspense>
           }
         />

@@ -101,6 +101,15 @@ class UserProfile(Base):
     # `baseCurrency`,PATCH /profile/me key `primary_currency`。大写 ISO 代码,
     # 预留 16 位对齐既有币种列宽。null = 客户端按自己的规则初始化,server 不猜。
     primary_currency: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # 职业档案 JSON blob:occupation / skills / experience_years /
+    # available_hours_per_week / employment_type / region / notes,喂给"收入增长
+    # 建议"AI 端点。
+    # 为什么单开一列而不是并租进 appearance_json / ai_config_json:那两个 blob 会被
+    # mobile push **整体替换**,寄放在里面的额外 key 会被静默清掉。这一列 server
+    # 独占,当前没有 mobile 写入方。
+    # 另外这个 blob 要进 LLM prompt,所以跟 mobile 自治的那两个 blob 不同,写入前
+    # 在 server 端做 schema 校验(schemas.CareerProfile),不透传。
+    career_profile_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

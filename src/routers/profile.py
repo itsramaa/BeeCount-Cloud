@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -17,6 +18,7 @@ from ..database import get_db
 from ..deps import get_current_user, require_any_scopes
 from ..models import User, UserProfile
 from ..schemas import (
+    CareerProfile,
     UserProfileAvatarUploadOut,
     UserProfileOut,
     UserProfilePatchRequest,
@@ -132,6 +134,34 @@ def _dump_appearance_json(value: dict | None) -> str | None:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
+def _dump_career_profile(value: CareerProfile | None) -> str | None:
+    """CareerProfile → TEXT。`exclude_none=True` 让没填的字段根本不落库,而不是
+    存一堆显式 null;全空(客户端传 `{}`)复用 _dump_appearance_json 的语义存
+    NULL,跟另外两个 blob 的清空方式一致。"""
+    if value is None:
+        return None
+    return _dump_appearance_json(value.model_dump(exclude_none=True))
+
+
+def _parse_career_profile(raw: str | None) -> CareerProfile | None:
+    """career_profile_json TEXT → 校验过的 CareerProfile。
+
+    跟 appearance / ai_config 不同,这个 blob 是 server 定形的,所以解析完还要
+    过一遍 schema。**校验失败返 None 而不是抛** —— 手改过的库行、或者未来版本
+    写进去的形状,不该让用户连 profile 都读不出来(一个可选 blob 不配 500 掉
+    整个 /profile/me)。
+    """
+    parsed = _parse_appearance_json(raw)
+    if parsed is None:
+        return None
+    try:
+        return CareerProfile.model_validate(parsed)
+    except ValidationError as exc:
+        # 只记错误摘要,不记 body:里面有职业、技能和自由文本 notes。
+        logger.warning("profile career_profile_json invalid: %s", str(exc)[:200])
+        return None
+
+
 @router.get("/me", response_model=UserProfileOut)
 def get_my_profile(
     _scopes: set[str] = Depends(_READ_SCOPE_DEP),
@@ -146,6 +176,7 @@ def get_my_profile(
     theme_primary_color = profile.theme_primary_color if profile is not None else None
     appearance = _parse_appearance_json(profile.appearance_json) if profile is not None else None
     ai_config = _parse_appearance_json(profile.ai_config_json) if profile is not None else None
+    career_profile = _parse_career_profile(profile.career_profile_json) if profile is not None else None
     primary_currency = profile.primary_currency if profile is not None else None
     return UserProfileOut(
         user_id=current_user.id,
@@ -160,6 +191,7 @@ def get_my_profile(
         appearance=appearance,
         ai_config=ai_config,
         primary_currency=primary_currency,
+        career_profile=career_profile,
     )
 
 
@@ -182,6 +214,7 @@ async def patch_my_profile(
             appearance_json=_dump_appearance_json(req.appearance),
             ai_config_json=_dump_appearance_json(req.ai_config),
             primary_currency=(req.primary_currency.upper() if req.primary_currency is not None else None),
+            career_profile_json=_dump_career_profile(req.career_profile),
             updated_at=now,
         )
         db.add(profile)
@@ -202,22 +235,27 @@ async def patch_my_profile(
             profile.ai_config_json = _dump_appearance_json(req.ai_config)
         if req.primary_currency is not None:
             profile.primary_currency = req.primary_currency.upper()
+        if req.career_profile is not None:
+            profile.career_profile_json = _dump_career_profile(req.career_profile)
         profile.updated_at = now
     db.commit()
     db.refresh(profile)
     logger.info(
-        "profile_patch: user=%s display_name=%s income_is_red=%s theme=%s appearance=%s ai_config_len=%s avatar_version=%s primary_currency=%s",
+        "profile_patch: user=%s display_name=%s income_is_red=%s theme=%s appearance=%s ai_config_len=%s career_profile_len=%s avatar_version=%s primary_currency=%s",
         current_user.id,
         profile.display_name,
         profile.income_is_red,
         profile.theme_primary_color,
         profile.appearance_json,
         len(profile.ai_config_json or ""),
+        # 只记长度:里面有职业、技能、自由文本 notes,对齐 ai_config 的处理。
+        len(profile.career_profile_json or ""),
         profile.avatar_version,
         profile.primary_currency,
     )
     appearance = _parse_appearance_json(profile.appearance_json)
     ai_config = _parse_appearance_json(profile.ai_config_json)
+    career_profile = _parse_career_profile(profile.career_profile_json)
     await _broadcast_profile_change(
         request,
         user_id=current_user.id,
@@ -230,6 +268,7 @@ async def patch_my_profile(
             "primary_currency": profile.primary_currency,
             # ai_config 可能很大(providers 数组里若干对象),WS payload 不塞,
             # 客户端收到 profile_change 自己拉 /profile/me 即可。
+            # career_profile 同理不塞:体积 + 它不是别的设备渲染要用的东西。
         },
     )
     return UserProfileOut(
@@ -248,6 +287,7 @@ async def patch_my_profile(
         appearance=appearance,
         ai_config=ai_config,
         primary_currency=profile.primary_currency,
+        career_profile=career_profile,
     )
 
 

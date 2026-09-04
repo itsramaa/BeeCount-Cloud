@@ -70,5 +70,22 @@ expect(parseRoute('/app/workspace/transactions')).toEqual({
         section: 'goals'
       })
     ).toBe('/app/goals')
+    expect(
+      routePath({
+        kind: 'app',
+        ledgerId: '',
+        section: 'income-growth'
+      })
+    ).toBe('/app/income-growth')
+  })
+
+  // `/app/income-growth` 必须进 parseRoute 的 root-section 白名单。漏了的话
+  // 它会被当成 legacy 的 `:ledgerId`,静默渲染成 transactions —— tsc 抓不到。
+  it('parses the income-growth root section instead of treating it as a ledger id', () => {
+    expect(parseRoute('/app/income-growth')).toEqual({
+      kind: 'app',
+      ledgerId: '',
+      section: 'income-growth'
+    })
   })
 })
