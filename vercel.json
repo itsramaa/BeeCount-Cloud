@@ -12,10 +12,28 @@
   },
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": { "service": "app" }
+    },
+    {
+      "source": "/.well-known/(.*)",
+      "destination": { "service": "app" }
+    },
+    {
+      "source": "/healthz",
+      "destination": { "service": "app" }
+    },
+    {
+      "source": "/ready",
+      "destination": { "service": "app" }
+    },
+    {
+      "source": "/metrics",
+      "destination": { "service": "app" }
+    },
+    {
       "source": "/(.*)",
-      "destination": {
-        "service": "app"
-      }
+      "destination": { "service": "web" }
     }
   ]
 }

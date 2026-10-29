@@ -7,10 +7,16 @@ from .config import get_settings
 
 settings = get_settings()
 
+db_url = settings.database_url
+if db_url.startswith("postgres://"):
+    db_url = "postgresql+psycopg://" + db_url[len("postgres://"):]
+elif db_url.startswith("postgresql://"):
+    db_url = "postgresql+psycopg://" + db_url[len("postgresql://"):]
+
 engine_kwargs: dict = {"pool_pre_ping": True}
-if settings.database_url.startswith("sqlite"):
+if db_url.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}
-engine = create_engine(settings.database_url, **engine_kwargs)
+engine = create_engine(db_url, **engine_kwargs)
 
 
 # 生产 SQLite 必配:WAL + busy_timeout。详见 .docs/sqlite-concurrency-fix.md
